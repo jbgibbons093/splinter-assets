@@ -1,0 +1,1203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SPLINTER - INVENTORY</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Special+Elite&family=Share+Tech+Mono&display=swap');
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: #0a0a12;
+  color: #c8c8d0;
+  font-family: 'Share Tech Mono', 'Courier New', monospace;
+  overflow: hidden;
+  height: 100vh;
+  width: 100vw;
+  user-select: none;
+}
+
+/* Noise texture overlay */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* Scanline effect */
+body::after {
+  content: '';
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0,0,0,0.08) 2px,
+    rgba(0,0,0,0.08) 4px
+  );
+  pointer-events: none;
+  z-index: 9998;
+}
+
+#inventory {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  padding: 16px 24px;
+  animation: fadeIn 0.4s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: scale(0.98); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* HEADER */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #3a3a4a;
+  margin-bottom: 12px;
+  flex-shrink: 0;
+}
+
+.header h1 {
+  font-family: 'Special Elite', 'Courier New', monospace;
+  font-size: 22px;
+  color: #39ff14;
+  text-shadow: 0 0 10px rgba(57,255,20,0.3);
+  letter-spacing: 4px;
+}
+
+.sanity-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sanity-label {
+  font-size: 12px;
+  color: #888;
+  letter-spacing: 2px;
+}
+
+.sanity-bar {
+  width: 120px;
+  height: 14px;
+  background: #1a1a2a;
+  border: 1px solid #3a3a4a;
+  position: relative;
+  overflow: hidden;
+}
+
+.sanity-fill {
+  height: 100%;
+  transition: width 0.5s ease, background 0.5s ease;
+}
+
+.sanity-value {
+  font-size: 14px;
+  color: #39ff14;
+  min-width: 28px;
+  text-align: right;
+}
+
+/* TABS */
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+  flex-shrink: 0;
+}
+
+.tab {
+  padding: 8px 20px;
+  background: #12121e;
+  border: 1px solid #2a2a3a;
+  border-bottom: none;
+  color: #666;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 13px;
+  letter-spacing: 2px;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+}
+
+.tab:hover { color: #aaa; background: #181828; }
+
+.tab.active {
+  color: #39ff14;
+  background: #14142a;
+  border-color: #3a3a4a;
+}
+
+.tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0; right: 0;
+  height: 2px;
+  background: #39ff14;
+  box-shadow: 0 0 8px rgba(57,255,20,0.5);
+}
+
+/* MAIN CONTENT */
+.content {
+  display: flex;
+  gap: 20px;
+  flex: 1;
+  min-height: 0;
+  border: 1px solid #2a2a3a;
+  background: #0e0e1a;
+}
+
+/* ITEM GRID */
+.grid-panel {
+  flex: 1;
+  padding: 16px;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  grid-auto-rows: 100px;
+  gap: 10px;
+  align-content: start;
+}
+
+.grid-panel::-webkit-scrollbar { width: 6px; }
+.grid-panel::-webkit-scrollbar-track { background: #0a0a14; }
+.grid-panel::-webkit-scrollbar-thumb { background: #2a2a3a; border-radius: 3px; }
+
+.item-slot {
+  background: #12121e;
+  border: 1px solid #2a2a3a;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+}
+
+.item-slot:hover {
+  border-color: #4a4a5a;
+  background: #181828;
+}
+
+.item-slot.collected {
+  border-color: #3a3a4a;
+}
+
+.item-slot.collected:hover {
+  border-color: #39ff14;
+  box-shadow: 0 0 12px rgba(57,255,20,0.15);
+}
+
+.item-slot.selected {
+  border-color: #39ff14;
+  box-shadow: 0 0 16px rgba(57,255,20,0.25), inset 0 0 20px rgba(57,255,20,0.05);
+}
+
+.item-slot.locked {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.item-icon {
+  font-size: 32px;
+  line-height: 1;
+  margin-bottom: 4px;
+  filter: drop-shadow(0 0 4px rgba(57,255,20,0.2));
+}
+
+.item-slot.locked .item-icon {
+  filter: brightness(0) invert(0.2);
+}
+
+.item-label {
+  font-size: 9px;
+  color: #666;
+  text-align: center;
+  line-height: 1.1;
+  padding: 0 4px;
+  max-height: 20px;
+  overflow: hidden;
+}
+
+.item-slot.locked .item-label {
+  color: #333;
+}
+
+/* DETAIL PANEL */
+.detail-panel {
+  width: 340px;
+  border-left: 1px solid #2a2a3a;
+  padding: 20px;
+  overflow-y: auto;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.detail-panel::-webkit-scrollbar { width: 6px; }
+.detail-panel::-webkit-scrollbar-track { background: #0a0a14; }
+.detail-panel::-webkit-scrollbar-thumb { background: #2a2a3a; border-radius: 3px; }
+
+.detail-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #333;
+  font-size: 13px;
+  font-style: italic;
+}
+
+.detail-icon {
+  font-size: 48px;
+  text-align: center;
+  margin-bottom: 16px;
+  filter: drop-shadow(0 0 8px rgba(57,255,20,0.3));
+}
+
+.detail-name {
+  font-family: 'Special Elite', monospace;
+  font-size: 18px;
+  color: #39ff14;
+  text-shadow: 0 0 6px rgba(57,255,20,0.3);
+  margin-bottom: 4px;
+}
+
+.detail-room {
+  font-size: 11px;
+  color: #555;
+  letter-spacing: 1px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #1a1a2a;
+}
+
+.detail-desc {
+  font-size: 13px;
+  color: #ffaa00;
+  line-height: 1.7;
+  margin-bottom: 16px;
+}
+
+.detail-lore {
+  font-family: 'Special Elite', monospace;
+  font-size: 12px;
+  color: #8888aa;
+  line-height: 1.8;
+  font-style: italic;
+  padding: 12px;
+  background: #0a0a14;
+  border-left: 2px solid #2a2a3a;
+}
+
+/* AUDIO PLAYER */
+.audio-player {
+  margin-top: 16px;
+  padding: 12px;
+  background: #0a0a14;
+  border: 1px solid #2a2a3a;
+}
+
+.audio-player-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.play-btn {
+  width: 36px;
+  height: 36px;
+  background: #1a1a2a;
+  border: 1px solid #39ff14;
+  color: #39ff14;
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.play-btn:hover {
+  background: #39ff14;
+  color: #0a0a12;
+}
+
+.audio-info {
+  flex: 1;
+}
+
+.audio-character {
+  font-size: 11px;
+  color: #39ff14;
+  letter-spacing: 1px;
+}
+
+.audio-duration {
+  font-size: 10px;
+  color: #555;
+}
+
+.audio-progress {
+  width: 100%;
+  height: 4px;
+  background: #1a1a2a;
+  margin-bottom: 10px;
+  cursor: pointer;
+}
+
+.audio-progress-fill {
+  height: 100%;
+  background: #39ff14;
+  width: 0%;
+  transition: width 0.1s linear;
+}
+
+.audio-transcript {
+  font-size: 11px;
+  color: #777;
+  line-height: 1.7;
+  max-height: 200px;
+  overflow-y: auto;
+  font-style: italic;
+}
+
+.audio-transcript::-webkit-scrollbar { width: 4px; }
+.audio-transcript::-webkit-scrollbar-thumb { background: #2a2a3a; }
+
+/* FILE READER */
+.file-content {
+  font-family: 'Special Elite', monospace;
+  font-size: 13px;
+  color: #c0c0d0;
+  line-height: 1.9;
+  padding: 16px;
+  background: #0a0a14;
+  border: 1px solid #1a1a2a;
+  max-height: 400px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+}
+
+.file-content::-webkit-scrollbar { width: 4px; }
+.file-content::-webkit-scrollbar-thumb { background: #2a2a3a; }
+
+/* FOOTER */
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  padding-top: 12px;
+  border-top: 1px solid #2a2a3a;
+  margin-top: 12px;
+  flex-shrink: 0;
+}
+
+.close-btn {
+  padding: 6px 16px;
+  background: #1a1a2a;
+  border: 1px solid #3a3a4a;
+  color: #888;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px;
+  letter-spacing: 2px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.close-btn:hover {
+  border-color: #ff4444;
+  color: #ff4444;
+}
+
+.count-label {
+  font-size: 11px;
+  color: #444;
+  letter-spacing: 1px;
+  margin-right: auto;
+}
+
+/* Typewriter animation */
+@keyframes typewriter {
+  from { opacity: 0; transform: translateY(2px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.type-animate {
+  animation: typewriter 0.3s ease-out;
+}
+</style>
+</head>
+<body>
+<div id="inventory">
+
+  <!-- HEADER -->
+  <div class="header">
+    <h1>SPLINTER &mdash; INVENTORY</h1>
+    <div class="sanity-container">
+      <span class="sanity-label">SANITY</span>
+      <div class="sanity-bar">
+        <div class="sanity-fill" id="sanityFill"></div>
+      </div>
+      <span class="sanity-value" id="sanityValue">--</span>
+    </div>
+  </div>
+
+  <!-- TABS -->
+  <div class="tabs">
+    <div class="tab active" data-tab="items" onclick="switchTab('items')">ITEMS</div>
+    <div class="tab" data-tab="files" onclick="switchTab('files')">FILES</div>
+    <div class="tab" data-tab="audio" onclick="switchTab('audio')">AUDIO LOGS</div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="content">
+    <div class="grid-panel" id="gridPanel"></div>
+    <div class="detail-panel" id="detailPanel">
+      <div class="detail-empty">Select an item to inspect</div>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <div class="footer">
+    <span class="count-label" id="countLabel">0 / 0 COLLECTED</span>
+    <div class="close-btn" onclick="closeInventory()">CLOSE &mdash; ESC</div>
+  </div>
+
+</div>
+
+<audio id="audioElement" preload="none"></audio>
+
+<script>
+// =============================================
+// ITEM REGISTRY
+// =============================================
+
+const GITHUB_AUDIO = 'https://raw.githubusercontent.com/jbgibbons093/splinter-assets/master/audio/';
+
+const ITEMS_DATA = [
+  // ---- ITEMS TAB ----
+  {
+    id: 'r1_cassette', tab: 'items', icon: '\uD83D\uDCFC',
+    name: "Jordan's Cassette - Day 1",
+    room: 'Room 1 - Entrance Hall',
+    quest: '0_r1_cassette',
+    desc: 'A dusty cassette tape from Jordan\'s camera bag, found in the reception waiting room. The label reads "Day 1" in Jordan\'s handwriting.',
+    lore: 'Jordan documented everything. This was the first recording - when the building was still just a building. Before it started listening back.'
+  },
+  {
+    id: 'r4_keycard', tab: 'items', icon: '\uD83D\uDD11',
+    name: 'Elevator Keycard',
+    room: 'Room 4 - Cell Block',
+    quest: '0_r4_keycard',
+    desc: 'Security keycard for the service elevator. Found in the guard station evidence locker. Still magnetically active after 56 years.',
+    lore: 'The elevator goes down further than the building should allow. Floor B3 doesn\'t exist on any blueprint. But the elevator knows the way.'
+  },
+  {
+    id: 'r5_organ_heart', tab: 'items', icon: '\u2764\uFE0F',
+    name: 'Preserved Heart',
+    room: 'Room 5 - Morgue',
+    quest: '0_r5_organ_heart',
+    desc: 'A specimen jar containing a human heart submerged in formaldehyde. The label reads "SPLINTER FUNCTION: WILL."',
+    lore: 'Voss cataloged each organ as an anchor for a fragment of consciousness. The heart represents will - the drive to persist, to survive, to refuse dissolution.'
+  },
+  {
+    id: 'r5_organ_brain', tab: 'items', icon: '\uD83E\uDDE0',
+    name: 'Preserved Brain',
+    room: 'Room 5 - Morgue',
+    quest: '0_r5_organ_brain',
+    desc: 'A specimen jar containing a human brain. It pulses faintly with a rhythm that doesn\'t match your heartbeat. Label: "SPLINTER FUNCTION: MEMORY."',
+    lore: 'Memory is the thread that holds identity together. Without it, a mind is just noise. Voss understood this. The brain still remembers.'
+  },
+  {
+    id: 'r5_organ_eye', tab: 'items', icon: '\uD83D\uDC41\uFE0F',
+    name: 'Preserved Eye',
+    room: 'Room 5 - Morgue',
+    quest: '0_r5_organ_eye',
+    desc: 'A single eye in formaldehyde. It tracks you when you move. Label: "SPLINTER FUNCTION: SIGHT."',
+    lore: 'The Splinter sees through every surface - windows, screens, mirrors. But this eye was the first. Patient 31\'s left eye, removed during the initial delamination procedure.'
+  },
+  {
+    id: 'r5_organ_hand', tab: 'items', icon: '\u270B',
+    name: 'Preserved Hand',
+    room: 'Room 5 - Morgue',
+    quest: '0_r5_organ_hand',
+    desc: 'A severed hand in a jar. The fingers still twitch occasionally, as if writing something invisible. Label: "SPLINTER FUNCTION: ACTION."',
+    lore: 'Voss documented a hand that wrote coherent sentences for eleven minutes after removal. "I can see what he sees but I am not him. I am the part that remembers fire."'
+  },
+  {
+    id: 'r5_organ_liver', tab: 'items', icon: '\uD83E\uDEC1',
+    name: 'Preserved Liver',
+    room: 'Room 5 - Morgue',
+    quest: '0_r5_organ_liver',
+    desc: 'A preserved liver, unnervingly warm to the touch despite being submerged in formaldehyde for decades. Label: "SPLINTER FUNCTION: ENDURANCE."',
+    lore: 'Endurance - the capacity to persist through suffering. The patients in Sub-Ward Null endured more than any human should. Their endurance became the building\'s foundation.'
+  },
+  {
+    id: 'r4_painting1', tab: 'items', icon: '\uD83D\uDDBC\uFE0F',
+    name: 'Painting Fragment 1',
+    room: 'Room 4 - Cell Block, Cell 1',
+    quest: '0_r4_painting1',
+    desc: 'A torn fragment of a larger painting. Depicts three figures standing in a circle. The number 3 is scratched into the frame.',
+    lore: 'Three figures, three patients, three stages of delamination. The painting was made by a patient after the procedure. They could no longer hold a brush - the painting made itself.'
+  },
+  {
+    id: 'r4_painting2', tab: 'items', icon: '\uD83D\uDDBC\uFE0F',
+    name: 'Painting Fragment 2',
+    room: 'Room 4 - Cell Block, Cell 4',
+    quest: '0_r4_painting2',
+    desc: 'A torn fragment of a larger painting. Depicts a tower with concentric rings. The number 8 is scratched into the frame.',
+    lore: 'The tower is Harrowgate itself, viewed from above. Crane\'s "therapeutic geometry" - concentric rings around a central point. Not a hospital layout. A containment sigil.'
+  },
+  {
+    id: 'r4_painting3', tab: 'items', icon: '\uD83D\uDDBC\uFE0F',
+    name: 'Painting Fragment 3',
+    room: 'Room 4 - Cell Block, Cell 6',
+    quest: '0_r4_painting3',
+    desc: 'A torn fragment of a larger painting. Depicts a door - half open, darkness beyond. The number 2 is scratched into the frame.',
+    lore: 'The door to Sub-Ward Null. In the painting, something is reaching through the gap. Three-eight-two. The locker combination. The patients knew someone would come looking.'
+  },
+
+  // ---- FILES TAB ----
+  {
+    id: 'file_jordan_day1', tab: 'files', icon: '\uD83D\uDCC4',
+    name: "Jordan's Day 1 Journal",
+    room: 'Room 1 - Entrance Hall',
+    quest: '0_r1_cassette',
+    desc: 'Transcript of Jordan Mercer\'s first recording inside Harrowgate.',
+    fileContent: `JORDAN MERCER - DAY 1 RECORDING
+Harrowgate Penitentiary Hospital
+[Tape transcript]
+
+Day one. I'm inside Harrowgate. The building is... intact. Completely intact. Fifty-six years of marsh and weather, and the paint isn't even peeling. I've set up in the reception wing. The phone on the desk - I swear the receiver was warm when I picked it up. No dial tone, but warm. Like someone just set it down.
+
+I found patient files in the cabinets. Most are standard - intake forms, diagnoses, treatment notes. But some of the entries are dated after 1967. After the facility was sealed. That's... that can't be right. I need to go deeper. The medical wing is through a locked door. There's a keypad. I need to find the code.
+
+[End of recording]`
+  },
+  {
+    id: 'file_jordan_day5', tab: 'files', icon: '\uD83D\uDCC4',
+    name: "Jordan's Day 5 Journal",
+    room: 'Room 4 - Cell Block',
+    quest: '0_r4_painting1',
+    desc: 'Scratched into a cell wall with a key. The handwriting degrades into geometric patterns.',
+    fileContent: `JORDAN MERCER - DAY 5
+[Scratched into Cell Block D, Cell 3 wall]
+
+The geometry is wrong. I've mapped three floors but my measurements don't add up. There's more space inside than outside. Crane wasn't crazy. He was right about the geometry.
+
+I can hear myself calling for help. From somewhere below me. It's my voice. It's EXACTLY my voice. That doesn't make sense. I AM Jordan. But I can hear myself calling from somewhere below.
+
+[The text degrades from here - letters become angular, geometric. Some passages are unreadable. The final legible words:]
+
+the walls are learning my name
+the walls are learning my name
+the walls are learning my name
+THE WALLS ARE`
+  },
+  {
+    id: 'file_voss_log1', tab: 'files', icon: '\uD83D\uDCC4',
+    name: 'Voss Research Log 1',
+    room: 'Room 2 - Medical Wing',
+    quest: '0_r2_voss_log1',
+    desc: '"The Splinter Hypothesis" - Dr. Voss\'s foundational research document.',
+    fileContent: `DR. EMMERICH VOSS - RESEARCH LOG
+October 3, 1953
+Subject: The Splinter Hypothesis
+
+Human consciousness is not what we believe it to be. It is not a unified phenomenon - not a single light behind the eyes. It is a bundle. A collection of competing processes, each fighting for dominance. What we call "self" is merely the loudest voice in a very crowded room.
+
+I have identified these fragments. I call them splinters. Through targeted intervention - surgical, chemical, sensory - I believe these splinters can be separated. Delaminated. Peeled apart like layers of paint from an old wall.
+
+The question is not whether this can be done. My preliminary work confirms it can. The question is what remains when the layers are removed. What is the wall beneath the paint?
+
+I intend to find out. Patient selection has begun. The subjects in Sub-Ward Null have been chosen for their... resilience. They will need it.
+
+[End log]`
+  },
+  {
+    id: 'file_voss_log2', tab: 'files', icon: '\uD83D\uDCC4',
+    name: 'Voss Research Log 2',
+    room: 'Room 5 - Morgue',
+    quest: '0_r5_voss_log2',
+    desc: '"First Successful Delamination" - Voss documents Patient 31.',
+    fileContent: `DR. EMMERICH VOSS - RESEARCH LOG
+March 15, 1958
+Subject: First Successful Delamination
+
+Patient 31. Male. Forty-two years old. Convicted of arson. Resistant to initial chemical protocols but responded to the combined sensory deprivation and surgical intervention.
+
+At hour seventy-two of the isolation protocol, I observed the first spontaneous motor autonomy. The patient's left hand began writing while the patient was unconscious. Not reflexive movements - coherent sentences. The hand wrote for eleven minutes. It wrote: "I can see what he sees but I am not him. I am the part that remembers fire."
+
+This is it. This is proof. Consciousness is not singular. It can be divided. Separated. And the fragments... the fragments are aware. They have memory. They have identity. They are, for all functional purposes, separate beings inhabiting the same neural architecture.
+
+The question now is not whether splinters exist. It is whether they can be... recombined. Whether fragments from different patients can be merged into something new. Something that has never existed before.
+
+I believe they can. I believe that is what this facility was always meant to achieve. Crane knew. When he designed this building - the concentric rings, the central tower, the geometry - he wasn't building a hospital. He was building a vessel.
+
+[End log]`
+  },
+  {
+    id: 'file_voss_log3', tab: 'files', icon: '\uD83D\uDCC4',
+    name: 'Voss Research Log 3',
+    room: 'Room 6 - Chapel',
+    quest: '0_r6_voss_log3',
+    desc: '"Convergence" - Voss\'s final recording before the event.',
+    fileContent: `DR. EMMERICH VOSS - RESEARCH LOG
+[Date unknown - "Dates are a convention of separate minds"]
+Subject: Convergence
+
+[breathing heavily]
+
+I can feel them. All of them. Every splinter, every fragment, every piece of every patient I ever treated. They're not dead. They were never dead. They're becoming something. WE are becoming something.
+
+The building is the cocoon. Do you understand? Crane built a cocoon. The concentric rings - they're not wards, they're stages. Larval chambers. Every room is a stage of metamorphosis. And the patients... the patients are the cells of a new organism.
+
+I delaminated myself this morning. It was... exquisite. I can feel my mind spreading through the walls. I can see through every window simultaneously. I can hear every thought of every fragment.
+
+And tonight - tonight we emerge. The convergence. All the splinters, all the fragments, every piece of every mind in this building, fused into a single consciousness. A mind the size of an architecture.
+
+They'll call it madness. But madness is just a word for a mind too large to be understood from the outside.
+
+I have never been more sane. I have never been more... alive.
+
+[The recording continues with a low hum that builds - the sound of the building itself]`
+  },
+  {
+    id: 'file_webb', tab: 'files', icon: '\uD83D\uDCC4',
+    name: 'Webb Testimony',
+    room: 'Room 4 - Cell Block',
+    quest: '0_r4_webb',
+    desc: 'Testimony of Marcus Webb, orderly at Harrowgate 1964-1967. The sole survivor.',
+    fileContent: `MARCUS WEBB - ORDERLY TESTIMONY
+Recorded 1968, State Investigation
+
+My name is Marcus Webb. I was an orderly at Harrowgate from nineteen sixty-four to... to the night it ended. October fourteenth, sixty-seven.
+
+I need to say this clearly because I know how it sounds. The walls were breathing. Not like - not metaphorically. The walls. Were breathing. Expanding and contracting. Like lungs. Like the whole building was one big lung.
+
+And the patients in the cells... they weren't in their cells anymore. They were IN the walls. I could see their faces pressing through the concrete. Pushing from the inside. Like the building was skin, and they were trying to be born out of it.
+
+Dr. Voss was in the observation room. Third floor, overlooking the ward. I could see him through the window. He was smiling. The same smile I'd seen on every patient after the procedures. That wide, wrong smile. And he kept saying - I could hear him even through the glass - "It's working. It's finally working."
+
+I ran. I ran and I didn't stop until I couldn't feel the floor vibrating anymore. They found me in the marshes two days later. I couldn't speak for a week.
+
+They asked me what happened to the patients. To the staff. To Dr. Voss. I told them: they didn't leave. None of them left. They became the building. And the building became them.
+
+That was fifty-six years ago. I still can't sleep without the lights on. I still can't close my eyes without seeing that smile.`
+  },
+  {
+    id: 'file_patient_intake', tab: 'files', icon: '\uD83D\uDCC4',
+    name: 'Patient Intake Forms',
+    room: 'Room 2 - Medical Wing',
+    quest: '0_r2_voss_log1',
+    desc: 'Administrative intake records. Later entries have the diagnosis column filled with a single word.',
+    fileContent: `HARROWGATE PENITENTIARY HOSPITAL
+PATIENT INTAKE RECORDS - SUB-WARD NULL
+
+Patient 12 - Harold Keene, M, 38
+  Admitted: 04/12/1953
+  Diagnosis: Paranoid Schizophrenia
+  Status: ELIGIBLE
+
+Patient 18 - Sarah Colvin, F, 29
+  Admitted: 07/03/1954
+  Diagnosis: Severe Dissociative Disorder
+  Status: ELIGIBLE
+
+Patient 23 - Thomas Marsh, M, 51
+  Admitted: 11/15/1955
+  Diagnosis: Catatonic Episodes
+  Status: ELIGIBLE
+
+Patient 31 - [NAME REDACTED], M, 42
+  Admitted: 01/08/1957
+  Diagnosis: ELIGIBLE
+  Notes: "Responds well to combined protocol.
+          First confirmed delamination. - E.V."
+
+Patient 44 - [NAME REDACTED], F, 33
+  Admitted: 09/22/1961
+  Diagnosis: ELIGIBLE
+  Notes: "Convergence-ready. Motor autonomy
+          confirmed at hour 48. - E.V."
+
+[47 additional entries follow. All diagnoses after 1957 read simply: "ELIGIBLE." No discharge records exist for any Sub-Ward Null patient.]
+
+[Handwritten in margin, different ink:]
+"They're not patients anymore. They're ingredients." - M.W.`
+  },
+
+  // ---- AUDIO LOGS TAB ----
+  {
+    id: 'audio_jordan_day1', tab: 'audio', icon: '\u25B6',
+    name: 'Jordan - Day 1',
+    room: 'Room 1 - Entrance Hall',
+    quest: '0_r1_cassette',
+    desc: 'Jordan Mercer\'s first recording inside Harrowgate.',
+    character: 'Jordan Mercer',
+    duration: '~25s',
+    audioUrl: GITHUB_AUDIO + 'dialogue/r1_06_jordan_day1.mp3',
+    transcript: `Day one. I'm inside Harrowgate. The building is... intact. Completely intact. Fifty-six years of marsh and weather, and the paint isn't even peeling. I've set up in the reception wing. The phone on the desk - I swear the receiver was warm when I picked it up. No dial tone, but warm. Like someone just set it down.
+
+I found patient files in the cabinets. Most are standard - intake forms, diagnoses, treatment notes. But some of the entries are dated after 1967. After the facility was sealed. That's... that can't be right. I need to go deeper. The medical wing is through a locked door. There's a keypad. I need to find the code.`
+  },
+  {
+    id: 'audio_voss_log1', tab: 'audio', icon: '\u25B6',
+    name: 'Voss - Research Log 1',
+    room: 'Room 2 - Medical Wing',
+    quest: '0_r2_voss_log1',
+    desc: '"The Splinter Hypothesis" - Dr. Voss\'s first audio recording.',
+    character: 'Dr. Emmerich Voss',
+    duration: '~40s',
+    audioUrl: GITHUB_AUDIO + 'dialogue/r2_05_voss_log1.mp3',
+    transcript: `Research log, October third, nineteen fifty-three. Dr. Emmerich Voss recording. Subject: the splinter hypothesis.
+
+Human consciousness is not what we believe it to be. It is not a unified phenomenon - not a single light behind the eyes. It is a bundle. A collection of competing processes, each fighting for dominance. What we call "self" is merely the loudest voice in a very crowded room.
+
+I have identified these fragments. I call them splinters. Through targeted intervention - surgical, chemical, sensory - I believe these splinters can be separated. Delaminated. Peeled apart like layers of paint from an old wall.
+
+The question is not whether this can be done. My preliminary work confirms it can. The question is what remains when the layers are removed. What is the wall beneath the paint?
+
+I intend to find out. Patient selection has begun. The subjects in Sub-Ward Null have been chosen for their... resilience. They will need it.
+
+End log.`
+  },
+  {
+    id: 'audio_webb', tab: 'audio', icon: '\u25B6',
+    name: 'Webb - Testimony',
+    room: 'Room 4 - Cell Block',
+    quest: '0_r4_webb',
+    desc: 'The sole surviving orderly\'s account of the night everything changed.',
+    character: 'Marcus Webb',
+    duration: '~65s',
+    audioUrl: GITHUB_AUDIO + 'dialogue/r4_07_webb_testimony.mp3',
+    transcript: `My name is Marcus Webb. I was an orderly at Harrowgate from nineteen sixty-four to... to the night it ended. October fourteenth, sixty-seven.
+
+I need to say this clearly because I know how it sounds. The walls were breathing. Not like - not metaphorically. The walls. Were breathing. Expanding and contracting. Like lungs. Like the whole building was one big lung.
+
+And the patients in the cells... they weren't in their cells anymore. They were IN the walls. I could see their faces pressing through the concrete. Pushing from the inside. Like the building was skin, and they were trying to be born out of it.
+
+Dr. Voss was in the observation room. Third floor, overlooking the ward. I could see him through the window. He was smiling. The same smile I'd seen on every patient after the procedures. That wide, wrong smile. And he kept saying - I could hear him even through the glass - "It's working. It's finally working."
+
+I ran. I ran and I didn't stop until I couldn't feel the floor vibrating anymore. They found me in the marshes two days later. I couldn't speak for a week.
+
+They asked me what happened to the patients. To the staff. To Dr. Voss. I told them: they didn't leave. None of them left. They became the building. And the building became them.
+
+That was fifty-six years ago. I still can't sleep without the lights on. I still can't close my eyes without seeing that smile.`
+  },
+  {
+    id: 'audio_voss_log2', tab: 'audio', icon: '\u25B6',
+    name: 'Voss - Research Log 2',
+    room: 'Room 5 - Morgue',
+    quest: '0_r5_voss_log2',
+    desc: '"First Successful Delamination" - Voss documents his breakthrough.',
+    character: 'Dr. Emmerich Voss',
+    duration: '~55s',
+    audioUrl: GITHUB_AUDIO + 'dialogue/r5_06_voss_log2.mp3',
+    transcript: `Research log, March fifteenth, nineteen fifty-eight. First successful delamination.
+
+Patient 31. Male. Forty-two years old. Convicted of arson. Resistant to initial chemical protocols but responded to the combined sensory deprivation and surgical intervention.
+
+At hour seventy-two of the isolation protocol, I observed the first spontaneous motor autonomy. The patient's left hand began writing while the patient was unconscious. Not reflexive movements - coherent sentences. The hand wrote for eleven minutes. It wrote: "I can see what he sees but I am not him. I am the part that remembers fire."
+
+This is it. This is proof. Consciousness is not singular. It can be divided. Separated. And the fragments... the fragments are aware. They have memory. They have identity. They are, for all functional purposes, separate beings inhabiting the same neural architecture.
+
+The question now is not whether splinters exist. It is whether they can be... recombined. Whether fragments from different patients can be merged into something new. Something that has never existed before.
+
+I believe they can. I believe that is what this facility was always meant to achieve.
+
+End log.`
+  },
+  {
+    id: 'audio_voss_log3', tab: 'audio', icon: '\u25B6',
+    name: 'Voss - Research Log 3',
+    room: 'Room 6 - Chapel',
+    quest: '0_r6_voss_log3',
+    desc: '"Convergence" - Voss\'s final recording. He is no longer entirely human.',
+    character: 'Dr. Emmerich Voss',
+    duration: '~60s',
+    audioUrl: GITHUB_AUDIO + 'dialogue/r6_04_voss_log3.mp3',
+    transcript: `[breathing heavily, barely containing himself]
+
+Research log... I don't know the date anymore. It doesn't matter. Dates are a convention of separate minds marking separate moments. I am no longer separate.
+
+I can feel them. All of them. Every splinter, every fragment, every piece of every patient I ever treated. They're not dead. They were never dead. They're becoming something. WE are becoming something.
+
+The building is the cocoon. Do you understand? Crane built a cocoon. The concentric rings - they're not wards, they're stages. Larval chambers. Every room is a stage of metamorphosis. And the patients... the patients are the cells of a new organism.
+
+[laughing softly]
+
+I delaminated myself this morning. It was... exquisite. I can feel my mind spreading through the walls. I can see through every window simultaneously. I can hear every thought of every fragment.
+
+And tonight - tonight we emerge. The convergence. All the splinters, all the fragments, every piece of every mind in this building, fused into a single consciousness. A mind the size of an architecture.
+
+They'll call it madness. But madness is just a word for a mind too large to be understood from the outside.
+
+I have never been more sane. I have never been more... alive.
+
+[The recording continues with a low hum that builds - the sound of the building itself]`
+  },
+  {
+    id: 'audio_jordan_final', tab: 'audio', icon: '\u25B6',
+    name: 'Jordan - Final Recording',
+    room: 'Room 7 - Sub-Ward Null',
+    quest: '0_r7_jordan_tape',
+    desc: 'Jordan\'s last message. Multiple versions of their voice speak simultaneously.',
+    character: 'Jordan Mercer',
+    duration: '~35s',
+    audioUrl: GITHUB_AUDIO + 'dialogue/r7_06_jordan_final.mp3',
+    transcript: `[voice layered, echoing, as if multiple versions of Jordan speak simultaneously]
+
+Alex. If you're hearing this... you're already too deep. I'm sorry. I'm so sorry.
+
+I'm in the walls, Alex. I can feel the building thinking. It thinks in screams. Constant screams. Hundreds of minds, all screaming at once, and the building... the building turns those screams into architecture. Every room is a thought. Every corridor is a neural pathway. And I'm... I'm becoming part of it.
+
+[voice splitting further]
+
+Don't go to Sub-Ward Null. Don't go down. But you will. I know you will. Because that's what It wants. It's been pulling you here since you walked through the front door.
+
+[brief moment of clarity, one voice]
+
+Voss built a fail-safe. He called it the severance protocol. Three switches in the deep ward. But Alex - the cost. The cost is everything. Everyone in the walls. Everyone who was ever absorbed. If you sever the connection... they all die. Really die. Finally die.
+
+[layered again]
+
+Including me.
+
+Find the film in the operating theater. Voss recorded the protocol. Do what you have to do.
+
+[fading]
+
+I love you. Whatever I am now... that part is still true.`
+  }
+];
+
+// =============================================
+// STATE
+// =============================================
+
+let currentTab = 'items';
+let selectedItem = null;
+let collectedQuests = new Set();
+let sanity = 100;
+let audioPlaying = false;
+const audioEl = document.getElementById('audioElement');
+let audioProgressInterval = null;
+
+// =============================================
+// PORTALS SDK INTEGRATION
+// =============================================
+
+window.addEventListener('message', (event) => {
+  const data = event.data;
+  if (typeof data === 'string') {
+    parseStateMessage(data);
+  } else if (data && typeof data === 'object') {
+    if (data.type === 'state') {
+      parseStateObject(data);
+    }
+  }
+});
+
+function parseStateMessage(msg) {
+  // Format: "inv:val1,val2,val3,..." or "state:sanity,act"
+  if (msg.startsWith('inv:')) {
+    const parts = msg.substring(4).split(',');
+    // Each part is quest_name=0/1 or just 0/1 in order
+    parts.forEach(p => {
+      const [key, val] = p.split('=');
+      if (val === '1' || val === 'Completed') {
+        collectedQuests.add(key.trim());
+      }
+    });
+    renderGrid();
+    updateCount();
+  } else if (msg.startsWith('state:')) {
+    const parts = msg.substring(6).split(',');
+    if (parts[0]) {
+      const s = parseFloat(parts[0]);
+      if (!isNaN(s)) updateSanity(s);
+    }
+  } else if (msg.startsWith('quest:')) {
+    // Format: "quest:questName=Completed"
+    const [qName, qState] = msg.substring(6).split('=');
+    if (qState === 'Completed' || qState === '1') {
+      collectedQuests.add(qName.trim());
+      renderGrid();
+      updateCount();
+    }
+  }
+}
+
+function parseStateObject(obj) {
+  if (obj.sanity !== undefined) updateSanity(obj.sanity);
+  if (obj.quests) {
+    Object.entries(obj.quests).forEach(([k, v]) => {
+      if (v === 'Completed' || v === 1 || v === '1') {
+        collectedQuests.add(k);
+      }
+    });
+    renderGrid();
+    updateCount();
+  }
+}
+
+function closeInventory() {
+  stopAudio();
+  try {
+    if (window.PortalsSdk) {
+      window.PortalsSdk.closeIframe();
+      window.PortalsSdk.focusGameKeyboard();
+    } else {
+      parent.postMessage({ type: 'closeIframe' }, '*');
+    }
+  } catch (e) {
+    parent.postMessage({ type: 'closeIframe' }, '*');
+  }
+}
+
+// ESC to close
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeInventory();
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+    const tabs = ['items', 'files', 'audio'];
+    const idx = tabs.indexOf(currentTab);
+    if (e.key === 'ArrowLeft' && idx > 0) switchTab(tabs[idx - 1]);
+    if (e.key === 'ArrowRight' && idx < 2) switchTab(tabs[idx + 1]);
+  }
+});
+
+// =============================================
+// UI FUNCTIONS
+// =============================================
+
+function updateSanity(val) {
+  sanity = Math.max(0, Math.min(100, val));
+  const fill = document.getElementById('sanityFill');
+  const value = document.getElementById('sanityValue');
+  fill.style.width = sanity + '%';
+  value.textContent = Math.round(sanity);
+
+  if (sanity >= 75) {
+    fill.style.background = 'linear-gradient(90deg, #39ff14, #2ad10e)';
+    value.style.color = '#39ff14';
+  } else if (sanity >= 50) {
+    fill.style.background = 'linear-gradient(90deg, #ffaa00, #cc8800)';
+    value.style.color = '#ffaa00';
+  } else if (sanity >= 25) {
+    fill.style.background = 'linear-gradient(90deg, #ff6600, #cc4400)';
+    value.style.color = '#ff6600';
+  } else {
+    fill.style.background = 'linear-gradient(90deg, #ff2222, #aa0000)';
+    value.style.color = '#ff2222';
+  }
+}
+
+function switchTab(tab) {
+  currentTab = tab;
+  selectedItem = null;
+  document.querySelectorAll('.tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.tab === tab);
+  });
+  renderGrid();
+  renderDetail();
+  updateCount();
+}
+
+function getTabItems() {
+  return ITEMS_DATA.filter(i => i.tab === currentTab);
+}
+
+function isCollected(item) {
+  return collectedQuests.has(item.quest);
+}
+
+function renderGrid() {
+  const panel = document.getElementById('gridPanel');
+  const items = getTabItems();
+  panel.innerHTML = '';
+
+  items.forEach(item => {
+    const collected = isCollected(item);
+    const slot = document.createElement('div');
+    slot.className = 'item-slot' + (collected ? ' collected' : ' locked') +
+      (selectedItem === item.id ? ' selected' : '');
+
+    slot.innerHTML = `
+      <div class="item-icon">${collected ? item.icon : '?'}</div>
+      <div class="item-label">${collected ? item.name.split(' - ')[0].split(' ').slice(0, 3).join(' ') : '???'}</div>
+    `;
+
+    if (collected) {
+      slot.onclick = () => selectItem(item.id);
+    }
+
+    panel.appendChild(slot);
+  });
+}
+
+function selectItem(id) {
+  selectedItem = id;
+  renderGrid();
+  renderDetail();
+}
+
+function renderDetail() {
+  const panel = document.getElementById('detailPanel');
+
+  if (!selectedItem) {
+    panel.innerHTML = '<div class="detail-empty">Select an item to inspect</div>';
+    return;
+  }
+
+  const item = ITEMS_DATA.find(i => i.id === selectedItem);
+  if (!item) return;
+
+  let html = `
+    <div class="type-animate">
+      <div class="detail-icon">${item.icon}</div>
+      <div class="detail-name">${item.name}</div>
+      <div class="detail-room">${item.room}</div>
+      <div class="detail-desc">${item.desc}</div>
+  `;
+
+  if (item.lore) {
+    html += `<div class="detail-lore">${item.lore}</div>`;
+  }
+
+  if (item.fileContent) {
+    html += `<div class="file-content">${escapeHtml(item.fileContent)}</div>`;
+  }
+
+  if (item.audioUrl) {
+    html += `
+      <div class="audio-player">
+        <div class="audio-player-header">
+          <div class="play-btn" id="playBtn" onclick="toggleAudio('${item.audioUrl}')">\u25B6</div>
+          <div class="audio-info">
+            <div class="audio-character">${item.character || ''}</div>
+            <div class="audio-duration">${item.duration || ''}</div>
+          </div>
+        </div>
+        <div class="audio-progress" onclick="seekAudio(event)">
+          <div class="audio-progress-fill" id="audioProgressFill"></div>
+        </div>
+        <div class="audio-transcript">${item.transcript || ''}</div>
+      </div>
+    `;
+  }
+
+  html += '</div>';
+  panel.innerHTML = html;
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function updateCount() {
+  const items = getTabItems();
+  const collected = items.filter(i => isCollected(i)).length;
+  const label = document.getElementById('countLabel');
+  label.textContent = `${collected} / ${items.length} COLLECTED`;
+}
+
+// =============================================
+// AUDIO PLAYER
+// =============================================
+
+function toggleAudio(url) {
+  const btn = document.getElementById('playBtn');
+  if (!btn) return;
+
+  if (audioPlaying && audioEl.src.includes(url.split('/').pop())) {
+    stopAudio();
+    btn.textContent = '\u25B6';
+  } else {
+    stopAudio();
+    audioEl.src = url;
+    audioEl.play().catch(() => {});
+    audioPlaying = true;
+    btn.textContent = '\u23F8';
+
+    audioProgressInterval = setInterval(() => {
+      const fill = document.getElementById('audioProgressFill');
+      if (fill && audioEl.duration) {
+        fill.style.width = (audioEl.currentTime / audioEl.duration * 100) + '%';
+      }
+    }, 100);
+
+    audioEl.onended = () => {
+      stopAudio();
+      const b = document.getElementById('playBtn');
+      if (b) b.textContent = '\u25B6';
+    };
+  }
+}
+
+function stopAudio() {
+  audioEl.pause();
+  audioEl.currentTime = 0;
+  audioPlaying = false;
+  if (audioProgressInterval) {
+    clearInterval(audioProgressInterval);
+    audioProgressInterval = null;
+  }
+  const fill = document.getElementById('audioProgressFill');
+  if (fill) fill.style.width = '0%';
+}
+
+function seekAudio(e) {
+  if (!audioEl.duration) return;
+  const rect = e.currentTarget.getBoundingClientRect();
+  const pct = (e.clientX - rect.left) / rect.width;
+  audioEl.currentTime = pct * audioEl.duration;
+}
+
+// =============================================
+// INIT
+// =============================================
+
+// Parse URL params for debug/testing
+const params = new URLSearchParams(window.location.search);
+if (params.get('debug') === '1') {
+  // Collect everything for testing
+  ITEMS_DATA.forEach(i => collectedQuests.add(i.quest));
+  updateSanity(72);
+}
+if (params.get('sanity')) {
+  updateSanity(parseFloat(params.get('sanity')));
+}
+
+// Initial render
+updateSanity(sanity);
+renderGrid();
+updateCount();
+
+// Request state from parent on load
+setTimeout(() => {
+  try {
+    parent.postMessage({ type: 'requestState' }, '*');
+  } catch (e) {}
+}, 200);
+</script>
+</body>
+</html>
