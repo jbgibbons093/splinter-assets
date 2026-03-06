@@ -444,6 +444,7 @@ body::after {
 </style>
 </head>
 <body>
+<script src="https://portals-labs.github.io/portals-sdk/portals-sdk.js?v=10005456"></script>
 <div id="inventory">
 
   <!-- HEADER -->
@@ -904,6 +905,17 @@ let audioProgressInterval = null;
 // PORTALS SDK INTEGRATION
 // =============================================
 
+// Use PortalsSdk message listener if available, fallback to window.addEventListener
+if (window.PortalsSdk && window.PortalsSdk.setMessageListener) {
+  window.PortalsSdk.setMessageListener((msg) => {
+    if (typeof msg === 'string') {
+      parseStateMessage(msg);
+    } else if (msg && typeof msg === 'object') {
+      if (msg.type === 'state') parseStateObject(msg);
+    }
+  });
+}
+// Fallback for testing outside Portals
 window.addEventListener('message', (event) => {
   const data = event.data;
   if (typeof data === 'string') {
