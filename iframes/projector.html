@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Film Projector</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    background: #000;
+    overflow: hidden;
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Courier New', monospace;
+}
+
+#container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+}
+
+video {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    filter: sepia(0.3) contrast(1.3) brightness(0.85);
+}
+
+/* Film grain overlay */
+#grain {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    z-index: 10;
+    opacity: 0.4;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+    animation: grainShift 0.1s steps(3) infinite;
+}
+
+@keyframes grainShift {
+    0% { transform: translate(0, 0); }
+    33% { transform: translate(-2px, 1px); }
+    66% { transform: translate(1px, -2px); }
+    100% { transform: translate(2px, 2px); }
+}
+
+/* Scanlines */
+#scanlines {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    z-index: 11;
+    background: repeating-linear-gradient(
+        to bottom,
+        transparent 0px,
+        transparent 2px,
+        rgba(0,0,0,0.15) 2px,
+        rgba(0,0,0,0.15) 4px
+    );
+}
+
+/* Vignette */
+#vignette {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    z-index: 12;
+    background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.7) 100%);
+}
+
+/* Film scratches */
+#scratches {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    z-index: 13;
+}
+
+.scratch {
+    position: absolute;
+    top: 0;
+    width: 1px;
+    height: 100%;
+    background: rgba(255,255,255,0.1);
+    animation: scratchFlicker 0.15s steps(2) infinite;
+}
+
+@keyframes scratchFlicker {
+    0% { opacity: 0; }
+    50% { opacity: 1; }
+    100% { opacity: 0; }
+}
+
+/* Projector flicker */
+#flicker {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    z-index: 14;
+    animation: projFlicker 0.08s infinite;
+}
+
+@keyframes projFlicker {
+    0% { background: transparent; }
+    30% { background: rgba(0,0,0,0.03); }
+    60% { background: rgba(255,255,200,0.02); }
+    100% { background: transparent; }
+}
+
+/* Film leader countdown */
+#leader {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #111;
+    color: #ccc;
+    font-size: 120px;
+    font-weight: bold;
+    transition: opacity 0.3s;
+}
+
+#leader.hidden { opacity: 0; pointer-events: none; }
+
+#leader-circle {
+    width: 200px; height: 200px;
+    border: 4px solid #888;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+
+#leader-circle::before {
+    content: '';
+    position: absolute;
+    width: 100%; height: 100%;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    border-top-color: #fff;
+    animation: leaderSpin 1s linear infinite;
+}
+
+@keyframes leaderSpin {
+    to { transform: rotate(360deg); }
+}
+
+/* Scare flash */
+#scare-flash {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 30;
+    background: #fff;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.05s;
+}
+
+#scare-flash.active {
+    opacity: 1;
+    animation: scareFlash 0.5s ease-out forwards;
+}
+
+@keyframes scareFlash {
+    0% { opacity: 1; }
+    10% { opacity: 0; }
+    20% { opacity: 0.8; }
+    30% { opacity: 0; }
+    50% { opacity: 0.3; }
+    100% { opacity: 0; }
+}
+
+/* Status text */
+#status {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 15;
+    color: rgba(200,200,180,0.5);
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+}
+</style>
+</head>
+<body>
+
+<div id="container">
+    <video id="film" playsinline></video>
+    <div id="grain"></div>
+    <div id="scanlines"></div>
+    <div id="vignette"></div>
+    <div id="scratches"></div>
+    <div id="flicker"></div>
+    <div id="leader"><div id="leader-circle"><span id="countdown">3</span></div></div>
+    <div id="scare-flash"></div>
+    <div id="status"></div>
+</div>
+
+<script src="https://sdk.portal.ws/v1/portals-sdk.js"></script>
+<script>
+const params = new URLSearchParams(window.location.search);
+const scene = params.get('scene') || 'delamination';
+const scareAt = parseFloat(params.get('scareAt') || '15');
+const debug = params.get('debug') === '1';
+
+const VIDEOS = {
+    delamination: 'https://raw.githubusercontent.com/jbgibbons093/splinter-assets/master/video/r2_delamination.mp4',
+    final: 'https://raw.githubusercontent.com/jbgibbons093/splinter-assets/master/video/r7_final_film.mp4'
+};
+
+const video = document.getElementById('film');
+const leader = document.getElementById('leader');
+const countdownEl = document.getElementById('countdown');
+const scareFlash = document.getElementById('scare-flash');
+const statusEl = document.getElementById('status');
+
+let scareFired = false;
+
+// Random film scratches
+const scratchContainer = document.getElementById('scratches');
+function addScratches() {
+    scratchContainer.innerHTML = '';
+    const count = 2 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < count; i++) {
+        const s = document.createElement('div');
+        s.className = 'scratch';
+        s.style.left = (5 + Math.random() * 90) + '%';
+        s.style.animationDelay = (Math.random() * 0.1) + 's';
+        scratchContainer.appendChild(s);
+    }
+}
+setInterval(addScratches, 300);
+
+// Film leader countdown: 3, 2, 1, then play
+function runLeader() {
+    let count = 3;
+    countdownEl.textContent = count;
+    const interval = setInterval(() => {
+        count--;
+        if (count > 0) {
+            countdownEl.textContent = count;
+        } else {
+            clearInterval(interval);
+            leader.classList.add('hidden');
+            startFilm();
+        }
+    }, 800);
+}
+
+function startFilm() {
+    const url = VIDEOS[scene] || VIDEOS.delamination;
+    video.src = url;
+    video.muted = true; // Audio comes from Portals sound effects
+    video.play().catch(e => {
+        if (debug) statusEl.textContent = 'Autoplay blocked: ' + e.message;
+        // Try again with user gesture
+        document.addEventListener('click', () => video.play(), { once: true });
+    });
+
+    if (debug) statusEl.textContent = `Playing: ${scene} | scare@${scareAt}s`;
+}
+
+// Monitor playback for scare timestamp
+video.addEventListener('timeupdate', () => {
+    if (!scareFired && video.currentTime >= scareAt) {
+        scareFired = true;
+        fireScare();
+    }
+});
+
+video.addEventListener('ended', () => {
+    if (debug) statusEl.textContent = 'Film ended';
+    sendMessage('film_ended');
+
+    // Auto-close after 2s
+    setTimeout(() => {
+        try {
+            PortalsSdk.closeIframe();
+            PortalsSdk.focusGameKeyboard();
+        } catch(e) {}
+    }, 2000);
+});
+
+function fireScare() {
+    if (debug) statusEl.textContent = 'SCARE FIRED @ ' + video.currentTime.toFixed(1) + 's';
+    scareFlash.classList.add('active');
+    sendMessage('scare_hit');
+
+    setTimeout(() => {
+        scareFlash.classList.remove('active');
+    }, 600);
+}
+
+function sendMessage(type) {
+    const msg = JSON.stringify({ type: 'projector', event: type, scene: scene });
+    try {
+        // Portals SDK message
+        if (typeof PortalsSdk !== 'undefined' && PortalsSdk.sendMessageToUnity) {
+            PortalsSdk.sendMessageToUnity(msg);
+        }
+        // Also postMessage for parent frame
+        window.parent.postMessage(msg, '*');
+    } catch(e) {}
+}
+
+// Keyboard: ESC to close
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        try {
+            PortalsSdk.closeIframe();
+            PortalsSdk.focusGameKeyboard();
+        } catch(e2) {}
+    }
+});
+
+// Start
+runLeader();
+</script>
+</body>
+</html>
